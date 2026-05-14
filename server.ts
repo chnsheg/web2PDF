@@ -184,6 +184,7 @@ Your task is to identify the legitimate table of contents (TOC) chapters.
 1. DO NOT filter out the homepage, 'Home', 'README', introductory links, or root links (e.g., links ending in "#/"). YOU MUST INCLUDE the starting point of the tutorial.
 2. Filter out unrelated utility links ("Edit on GitHub", "Login", "Language", external outbound links).
 3. Preserve the hierarchical reading order present in the site's sidebar.
+4. STRICTLY remove duplicate entries. Do NOT return multiple objects that point to the same content or URL.
 ${outputFormatRule}
 Data:\n${JSON.stringify(links.slice(0, 150))}`;
 
@@ -204,10 +205,14 @@ Data:\n${JSON.stringify(links.slice(0, 150))}`;
       }
 
       // Deduplicate by URL
-      const seen = new Set();
+      const seenUrl = new Set();
       toc = toc.filter(chapter => {
-        if (seen.has(chapter.url)) return false;
-        seen.add(chapter.url);
+        let normalizedUrl = chapter.url.replace(/\/$/, '');
+        if (normalizedUrl.endsWith('#')) normalizedUrl = normalizedUrl.slice(0, -1);
+        if (normalizedUrl.endsWith('/#')) normalizedUrl = normalizedUrl.slice(0, -2);
+        
+        if (seenUrl.has(normalizedUrl)) return false;
+        seenUrl.add(normalizedUrl);
         return true;
       });
 
@@ -400,14 +405,21 @@ ${sampleHtml}
       </html>
       `;
 
-      await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 60000 });
+      await page.setContent(fullHtml, { waitUntil: 'load', timeout: 120000 }).catch(() => {});
+      
+      try {
+        await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 });
+      } catch (e) {
+        // Ignore timeout
+      }
       
       const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
         displayHeaderFooter: false,
         margin: { top: '0', right: '0', bottom: '0', left: '0' },
-        generateTaggedPDF: true
+        generateTaggedPDF: true,
+        timeout: 120000
       });
 
       await page.close();

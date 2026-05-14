@@ -1,6 +1,6 @@
 # 📚 AI WebBook Generator (智能网页转 PDF 助手)
 
-**AI WebBook Generator** 是一款基于大语言模型（LLM）和无头浏览器（Puppeteer）的全栈应用。它能够将碎片化的在线文档、教程网页智能地解析、清洗、重组，并生成排版精美、可供离线阅读的最佳实践级 PDF 文档。
+**AI WebBook Generator** 是一款基于大语言模型（LLM）和无头浏览器（Puppeteer）的全栈应用。它能够将碎片化的在线文档、内容网页智能地解析、清洗、重组，并生成排版精美、可供离线阅读的最佳实践级 PDF 文档。
 
 无论是零散的博客专栏、传统的文档框架（如 Docsify, VuePress），还是现代的静态站点，本作都能利用 AI 的强大理解能力提取准确的阅读顺序与核心内容。
 
@@ -63,7 +63,7 @@ npm run dev
 ## 💡 核心使用指南 / Usage
 
 1. **输入您的目标入口**: 
-   在主界面顶端输入框中，粘贴你希望提取和转换的教程网站首页 URL，例如：`https://datawhalechina.github.io/hello-agents/`。
+   在主界面顶端输入框中，粘贴你希望提取和转换的来源网站首页 URL，例如：`https://datawhalechina.github.io/hello-agents/`。
 2. **开启/关闭 AI 策略**:
    - `AI 降噪`: 让 AI 干预决定哪些区域属于多余广告和侧边菜单，并将其从文章流中隐藏（推荐开启）。
    - `AI 学习样式`: 是否让 AI 去目标站偷师学艺，保留原生 CSS 风格（根据目标站风格决定）。

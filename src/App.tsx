@@ -237,7 +237,7 @@ export default function App() {
                   type="text" 
                   value={url}
                   onChange={e => setUrl(e.target.value)}
-                  placeholder="输入教程链接..."
+                  placeholder="输入来源网址..."
                   className="w-full bg-[#FBFBFA] hover:bg-white text-gray-900 border border-gray-200 rounded-xl p-4 pr-32 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#2C2C2E]/10 focus:border-[#2C2C2E]/40 transition-all shadow-sm"
                 />
                 <button 
