@@ -27,14 +27,21 @@ function AutoResizeIframe({ srcDoc, className }: { srcDoc: string, className?: s
 }
 
 export default function App() {
-  const [url, setUrl] = useState('https://datawhalechina.github.io/hello-agents/#/');
+  const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('System Ready');
   const [statusMessage, setStatusMessage] = useState('等待输入内容源...');
   const [chapters, setChapters] = useState<{title: string, content: string, bodyClass?: string}[]>([]);
   const [globalCss, setGlobalCss] = useState('');
-  const [aiDenoise, setAiDenoise] = useState(false);
-    const [styleLearning, setStyleLearning] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(() => {
+    const saved = localStorage.getItem('docinsight_ai_enabled');
+    if (saved !== null) return saved === 'true';
+    return true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('docinsight_ai_enabled', String(aiEnabled));
+  }, [aiEnabled]);
     
     // Settings
   const [showSettings, setShowSettings] = useState(false);
@@ -69,7 +76,7 @@ export default function App() {
       const res = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, aiDenoise, styleLearning, customApiKey, customBaseUrl, customModel })
+        body: JSON.stringify({ url, aiEnabled, customApiKey, customBaseUrl, customModel })
       });
       let data;
       try {
@@ -102,7 +109,7 @@ export default function App() {
     if (htmlInput) {
        let fullHtml = `<div class="pdf-container">`;
        
-       if (styleLearning && globalCss) {
+       if (aiEnabled && globalCss) {
            fullHtml += `<style>${globalCss}</style>`;
        }
        
@@ -120,7 +127,7 @@ export default function App() {
        fullHtml += `</ul></div>`;
        
        chapters.forEach((chapter, idx) => {
-           fullHtml += `<div id="chapter-${idx}" class="page-break-before mb-24">`;
+           fullHtml += `<div class="page-break-before mb-24" id="chapter-${idx}">`;
            fullHtml += `<header style="border-top: 3px solid #111; padding-top: 2.5rem; margin-bottom: 3rem; position: relative; font-family: 'Noto Serif SC', serif;">`;
            fullHtml += `<div style="display:flex; justify-content: space-between; margin-bottom: 1.5rem; color: #9ca3af;">`;
            fullHtml += `<p style="font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">Chapter ${String(idx + 1).padStart(2, '0')}</p>`;
@@ -128,7 +135,7 @@ export default function App() {
            fullHtml += `<h2 style="font-size: 2.25rem; font-weight: bold; color: #111;">${chapter.title}</h2>`;
            fullHtml += `</header>`;
            
-           if (!styleLearning) {
+           if (!aiEnabled) {
               fullHtml += `<div class="custom-doc-style prose prose-sm md:prose-base max-w-none prose-gray
                                  [&>h1]:text-3xl [&>h1]:font-bold [&>h1]:mt-12 [&>h1]:mb-6 [&>h1]:pb-3 [&>h1]:border-b [&>h1]:border-gray-200 [&>h1]:font-serif [&>h1]:text-gray-900
                                  [&>h2]:text-2xl [&>h2]:font-bold [&>h2]:mt-10 [&>h2]:mb-4 [&>h2]:font-serif [&>h2]:text-gray-800
@@ -215,21 +222,12 @@ export default function App() {
                 <label className="text-sm font-semibold text-gray-900">来源地址 (URL)</label>
                 <div className="flex flex-col gap-2 items-end">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 font-medium tracking-wide">深度去噪过滤</span>
+                    <span className="text-xs text-gray-500 font-medium tracking-wide">AI增强</span>
                     <button 
-                      onClick={() => setAiDenoise(!aiDenoise)}
-                      className={`w-9 h-5 rounded-full flex items-center p-0.5 transition-colors shadow-inner ${aiDenoise ? 'bg-[#2C2C2E]' : 'bg-gray-200'}`}
+                      onClick={() => setAiEnabled(!aiEnabled)}
+                      className={`w-9 h-5 rounded-full flex items-center p-0.5 transition-colors shadow-inner ${aiEnabled ? 'bg-[#2C2C2E]' : 'bg-gray-200'}`}
                     >
-                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${aiDenoise ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 font-medium tracking-wide">智能样式学习</span>
-                    <button 
-                      onClick={() => setStyleLearning(!styleLearning)}
-                      className={`w-9 h-5 rounded-full flex items-center p-0.5 transition-colors shadow-inner ${styleLearning ? 'bg-[#2C2C2E]' : 'bg-gray-200'}`}
-                    >
-                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${styleLearning ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${aiEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
                     </button>
                   </div>
                 </div>
@@ -381,7 +379,7 @@ export default function App() {
                       <h2 className="text-3xl md:text-4xl font-serif font-bold leading-tight text-[#111]">{chapter.title}</h2>
                     </header>
 
-                    {styleLearning ? (
+                    {aiEnabled ? (
                        <AutoResizeIframe 
                          className="w-full border border-gray-100 rounded-xl bg-white shadow-sm"
                          srcDoc={`<html><head><base target="_blank" href="${url}"><style>html, body { height: auto !important; min-height: auto !important; overflow: hidden !important; position: static !important; margin: 0; padding: 20px; font-family: sans-serif; }\n${globalCss}</style><script>function sendHeight() { window.parent.postMessage({ type: 'resize', height: document.documentElement.scrollHeight + 40 }, '*'); } window.addEventListener('load', sendHeight); new ResizeObserver(sendHeight).observe(document.body);</script></head><body class="${chapter.bodyClass || ''}"><div class="custom-doc-style">${chapter.content}</div></body></html>`}

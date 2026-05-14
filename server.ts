@@ -143,7 +143,7 @@ const startServer = async () => {
   });
 
   app.post("/api/extract", async (req, res) => {
-    const { url, aiDenoise, styleLearning, customApiKey, customBaseUrl, customModel } = req.body;
+    const { url, aiEnabled, customApiKey, customBaseUrl, customModel } = req.body;
     if (!url) return res.status(400).json({ error: "URL is required" });
 
     if (!browser) {
@@ -218,7 +218,7 @@ Data:\n${JSON.stringify(links.slice(0, 150))}`;
       toc = toc.slice(0, 20);
 
       let noiseSelectors: string[] = [];
-      if (aiDenoise && toc.length > 0) {
+      if (aiEnabled && toc.length > 0) {
         try {
             await page.goto(toc[0].url, { waitUntil: "networkidle2", timeout: 20000 });
             await new Promise(r => setTimeout(r, 1000));
@@ -248,7 +248,7 @@ HTML:\n${sampleHtml}`;
       const chaptersData: { title: string; content: string }[] = [];
 
       let learnedCss = '';
-      if (styleLearning && toc.length > 0) {
+      if (aiEnabled && toc.length > 0) {
         try {
             await page.goto(toc[0].url, { waitUntil: "networkidle2", timeout: 20000 });
             await new Promise(r => setTimeout(r, 1000));
@@ -315,7 +315,7 @@ ${sampleHtml}
                 });
             });
             
-            if (aiDenoise && noiseSelectors.length > 0) {
+            if (aiEnabled && noiseSelectors.length > 0) {
                 noiseSelectors.forEach(selector => {
                     try {
                         Array.from(doc.querySelectorAll(selector)).forEach(el => el.remove());
@@ -325,7 +325,7 @@ ${sampleHtml}
             
             let finalContent = "";
             let bodyClass = "";
-            if (styleLearning) {
+            if (aiEnabled) {
                 let mainEl = doc.querySelector('article') || 
                              doc.querySelector('main') || 
                              doc.querySelector('.vp-doc') ||
@@ -400,13 +400,14 @@ ${sampleHtml}
       </html>
       `;
 
-      await page.setContent(fullHtml, { waitUntil: 'load', timeout: 60000 });
+      await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 60000 });
       
       const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
         displayHeaderFooter: false,
-        margin: { top: '0', right: '0', bottom: '0', left: '0' }
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+        generateTaggedPDF: true
       });
 
       await page.close();
