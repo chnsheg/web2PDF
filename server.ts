@@ -39,7 +39,7 @@ const startServer = async () => {
     return defaultAi;
   };
 
-  async function generateJson(prompt: string, aiConfig: { apiKey?: string, baseUrl?: string, isDenoise?: boolean, customModel?: string }) {
+  async function generateJson(prompt: string, aiConfig: { apiKey?: string, baseUrl?: string, isDenoise?: boolean, isStyle?: boolean, customModel?: string }) {
     if (aiConfig.apiKey && aiConfig.baseUrl) {
       const openai = new OpenAI({ apiKey: aiConfig.apiKey, baseURL: aiConfig.baseUrl.replace(/\/+$/, '') });
       try {
@@ -83,20 +83,32 @@ const startServer = async () => {
       }
     } else {
       // Gemini
-      const schema = aiConfig.isDenoise ? {
-        type: Type.ARRAY,
-        items: { type: Type.STRING },
-      } : {
-        type: Type.ARRAY,
-        items: {
+      let schema: any;
+      
+      if (aiConfig.isStyle) {
+        schema = {
           type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            url: { type: Type.STRING },
+          properties: { css: { type: Type.STRING } },
+          required: ["css"],
+        };
+      } else if (aiConfig.isDenoise) {
+        schema = {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        };
+      } else {
+        schema = {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              url: { type: Type.STRING },
+            },
+            required: ["title", "url"],
           },
-          required: ["title", "url"],
-        },
-      };
+        };
+      }
 
       const response = await getAi().models.generateContent({
         model: "gemini-2.5-flash",
@@ -140,14 +152,26 @@ const startServer = async () => {
 
     try {
       const page = await browser.newPage();
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+      try {
+        await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 });
+      } catch (e) {
+      }
+      
+      // Additional wait for SPAs (like docsify) that might build DOM after network idle
+      await new Promise(r => setTimeout(r, 1500));
       
       const links = await page.evaluate(() => {
-        const anchors = Array.from(document.querySelectorAll("a"));
-        return anchors.map(a => ({
-          href: a.href,
-          text: a.innerText.trim(),
-        })).filter(a => a.href && a.text && a.href.startsWith("http"));
+        // Look specifically for sidebar elements first, if they exist
+        const sidebarLinks = Array.from(document.querySelectorAll(".sidebar a, .navbar a, .nav-wrapper a, .menu a, .VPSidebar a, aside a"));
+        const anchors = sidebarLinks.length > 5 ? sidebarLinks : Array.from(document.querySelectorAll("a"));
+        return anchors.map(a => {
+          let href = (a as HTMLAnchorElement).href;
+          return {
+            href: href,
+            text: (a as HTMLElement).innerText.trim(),
+          };
+        }).filter(a => a.href && a.text && a.href.startsWith("http"));
       });
 
       const openaiCompatible = !!(customApiKey && customBaseUrl);
@@ -155,11 +179,12 @@ const startServer = async () => {
           ? "Return ONLY a JSON object with a 'data' property containing the array of chapters. e.g. {\"data\": [{\"title\":\"...\", \"url\":\"...\"}]}" 
           : "Return ONLY a JSON array, representing the chapters.";
       
-      const prompt = `This is a list of links found on a tutorial website: ${url}. 
-Identify the table of contents (TOC) links for the tutorial chapters.
-Filter out unrelated links (like "Edit on GitHub", "Login", external sites, etc.).
-${outputFormatRule} Ensure it's in the correct reading order.
-Ensure to resolve relative URLs if necessary, although the provided hrefs should be absolute.
+      const prompt = `This is an ordered list of navigation links extracted from a tutorial website: ${url}. 
+Your task is to identify the legitimate table of contents (TOC) chapters.
+1. DO NOT filter out the homepage, 'Home', 'README', introductory links, or root links (e.g., links ending in "#/"). YOU MUST INCLUDE the starting point of the tutorial.
+2. Filter out unrelated utility links ("Edit on GitHub", "Login", "Language", external outbound links).
+3. Preserve the hierarchical reading order present in the site's sidebar.
+${outputFormatRule}
 Data:\n${JSON.stringify(links.slice(0, 150))}`;
 
       let toc: { title: string; url: string }[] = [];
@@ -195,7 +220,8 @@ Data:\n${JSON.stringify(links.slice(0, 150))}`;
       let noiseSelectors: string[] = [];
       if (aiDenoise && toc.length > 0) {
         try {
-            await page.goto(toc[0].url, { waitUntil: "domcontentloaded", timeout: 20000 });
+            await page.goto(toc[0].url, { waitUntil: "networkidle2", timeout: 20000 });
+            await new Promise(r => setTimeout(r, 1000));
             const sampleHtml = await page.evaluate(() => document.body.innerHTML.substring(0, 50000));
             const denoiseFormatRule = openaiCompatible 
                 ? "Return ONLY a JSON object with a 'data' array of string CSS selectors. e.g. {\"data\": [\".footer\", \"#comments\"]}"
@@ -224,7 +250,8 @@ HTML:\n${sampleHtml}`;
       let learnedCss = '';
       if (styleLearning && toc.length > 0) {
         try {
-            await page.goto(toc[0].url, { waitUntil: "domcontentloaded", timeout: 20000 });
+            await page.goto(toc[0].url, { waitUntil: "networkidle2", timeout: 20000 });
+            await new Promise(r => setTimeout(r, 1000));
             
             // Extract all stylesheets first as a fallback, and to help AI if needed, but it's too big.
             const sampleHtml = await page.evaluate(() => {
@@ -254,7 +281,7 @@ HTML Snippet:
 ${sampleHtml}
 `;
 
-            let styleStr = await generateJson(stylePrompt, { apiKey: customApiKey, baseUrl: customBaseUrl, isDenoise: true, customModel });
+            let styleStr = await generateJson(stylePrompt, { apiKey: customApiKey, baseUrl: customBaseUrl, isStyle: true, customModel });
             let parsedStyle = JSON.parse(styleStr);
             learnedCss = parsedStyle.css || parsedStyle.data?.css || parsedStyle.data || '';
             console.log("AI learned CSS generated successfully");
@@ -266,10 +293,28 @@ ${sampleHtml}
       for (let i = 0; i < toc.length; i++) {
         const chapter = toc[i];
         try {
-            await page.goto(chapter.url, { waitUntil: "domcontentloaded", timeout: 20000 });
+            await page.goto(chapter.url, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+            try {
+              await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 });
+            } catch (e) {
+              // Ignore timeout
+            }
+            await new Promise(r => setTimeout(r, 1000));
 
             const html = await page.content();
             const doc = new JSDOM(html, { url: chapter.url }).window.document;
+            
+            ['src', 'href'].forEach(attr => {
+                doc.querySelectorAll(`[${attr}]`).forEach(el => {
+                    const val = el.getAttribute(attr);
+                    if (val && !val.startsWith('http') && !val.startsWith('data:') && !val.startsWith('blob:') && !val.startsWith('#')) {
+                        try {
+                            el.setAttribute(attr, new URL(val, chapter.url).href);
+                        } catch(e) {}
+                    }
+                });
+            });
+            
             if (aiDenoise && noiseSelectors.length > 0) {
                 noiseSelectors.forEach(selector => {
                     try {
@@ -332,7 +377,6 @@ ${sampleHtml}
       <html>
       <head>
         <meta charset="UTF-8">
-        ${url ? `<base href="${url}">` : ''}
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
         <style>

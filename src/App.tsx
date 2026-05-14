@@ -71,7 +71,12 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, aiDenoise, styleLearning, customApiKey, customBaseUrl, customModel })
       });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        throw new Error(`Invalid response format (Status ${res.status}). Ensure server is running properly.`);
+      }
       if (data.error) {
         setStatusMessage(`解析失败: ${data.error}`);
         setStatus('Error');
@@ -101,8 +106,21 @@ export default function App() {
            fullHtml += `<style>${globalCss}</style>`;
        }
        
+       fullHtml += `<div class="page-break-after mb-24">`;
+       fullHtml += `<h1 style="font-size: 2.5rem; font-weight: bold; margin-bottom: 2rem;">Table of Contents</h1>`;
+       fullHtml += `<ul style="list-style-type: none; padding-left: 0;">`;
        chapters.forEach((chapter, idx) => {
-           fullHtml += `<div class="page-break-before mb-24">`;
+           fullHtml += `<li style="margin-bottom: 1rem;">`;
+           fullHtml += `<a href="#chapter-${idx}" style="text-decoration: none; color: #333; font-size: 1.25rem;">`;
+           fullHtml += `<span style="font-family: monospace; margin-right: 1rem; color: #666;">${String(idx + 1).padStart(2, '0')}</span>`;
+           fullHtml += `${chapter.title}`;
+           fullHtml += `</a>`;
+           fullHtml += `</li>`;
+       });
+       fullHtml += `</ul></div>`;
+       
+       chapters.forEach((chapter, idx) => {
+           fullHtml += `<div id="chapter-${idx}" class="page-break-before mb-24">`;
            fullHtml += `<header style="border-top: 3px solid #111; padding-top: 2.5rem; margin-bottom: 3rem; position: relative; font-family: 'Noto Serif SC', serif;">`;
            fullHtml += `<div style="display:flex; justify-content: space-between; margin-bottom: 1.5rem; color: #9ca3af;">`;
            fullHtml += `<p style="font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">Chapter ${String(idx + 1).padStart(2, '0')}</p>`;
